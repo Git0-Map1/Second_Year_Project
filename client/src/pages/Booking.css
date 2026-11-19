@@ -1,0 +1,191 @@
+/* Main Booking Page */
+.booking-page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 35px 40px;
+  font-family: Arial, sans-serif;
+  color: #292929;
+}
+
+.booking-page-title {
+  font-size: 28px;
+  font-weight: 600;
+  margin-bottom: 30px;
+  color: #1b4332;
+}
+
+/* Main Content Layout */
+.booking-content {
+  display: grid;
+  grid-template-columns: 1fr 1.3fr;
+  gap: 30px;
+  align-items: start;
+}
+
+/* Selected Property Card */
+.booking-property-card {
+  padding: 22px;
+  border: 1px solid #e5eae7;
+  border-radius: 8px;
+  background: #f8faf9;
+}
+
+.booking-property-card h2,
+.booking-form-container h2 {
+  font-size: 21px;
+  margin-bottom: 20px;
+  color: #1b4332;
+}
+
+.booking-property-image {
+  width: 100%;
+  height: 230px;
+  object-fit: cover;
+  border-radius: 6px;
+  margin-bottom: 15px;
+}
+
+.booking-property-card h3 {
+  font-size: 19px;
+  margin-bottom: 12px;
+}
+
+.booking-property-card p {
+  font-size: 14px;
+  line-height: 1.7;
+  color: #555;
+}
+
+/* Booking Form Container */
+.booking-form-container {
+  padding: 25px;
+  border: 1px solid #e5eae7;
+  border-radius: 8px;
+  background: #fff;
+  min-height: 250px;
+}
+
+/* Customer Booking Form */
+
+.customer-booking-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.booking-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.booking-input-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.booking-input-group input,
+.booking-input-group textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 14px;
+  font-family: Arial, sans-serif;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.booking-input-group input:focus,
+.booking-input-group textarea:focus {
+  border-color: #1b4332;
+}
+
+.booking-input-group textarea {
+  resize: vertical;
+}
+
+
+/* Booking Payment Section */
+
+.booking-payment-section {
+  margin-top: 15px;
+  padding: 18px;
+  background: #f8faf9;
+  border: 1px solid #e5eae7;
+  border-radius: 6px;
+}
+
+.booking-payment-section h3 {
+  font-size: 18px;
+  color: #1b4332;
+  margin-bottom: 18px;
+}
+
+.booking-fee {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0;
+  margin-bottom: 15px;
+  border-bottom: 1px solid #ddd;
+  font-size: 15px;
+}
+
+.booking-fee strong {
+  color: #1b4332;
+  font-size: 18px;
+}
+
+/* Confirm Booking Button */
+
+.confirm-booking-button {
+  width: 100%;
+  margin-top: 20px;
+  padding: 14px;
+  background: #1b4332;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.confirm-booking-button:hover {
+  background: #245a43;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .booking-page {
+    padding: 20px;
+  }
+
+  .booking-content {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .booking-page {
+    padding: 15px;
+  }
+
+  .booking-page-title {
+    font-size: 23px;
+  }
+
+  .booking-property-image {
+    height: 200px;
+  }
+
+  .booking-form-container,
+  .booking-property-card {
+    padding: 18px;
+  }
+}

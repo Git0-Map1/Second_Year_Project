@@ -1,0 +1,63 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prime Estate - eSewa Test Payment</title>
+</head>
+<body>
+    <h2>Prime Estate - eSewa Test Payment</h2>
+
+    <p>Paste the complete JSON response from your POST /api/bookings request:</p>
+
+    <textarea
+        id="paymentResponse"
+        rows="15"
+        cols="80"
+        placeholder="Paste your booking API response here..."
+    ></textarea>
+
+    <br><br>
+
+    <button onclick="payWithEsewa()">Pay NPR 10 with eSewa</button>
+
+    <script>
+        function payWithEsewa() {
+            try {
+                const responseText =
+                    document.getElementById("paymentResponse").value;
+
+                const response = JSON.parse(responseText);
+
+                if (!response.success || !response.paymentData) {
+                    alert("Invalid booking payment response.");
+                    return;
+                }
+
+                const paymentData = response.paymentData;
+                const paymentUrl = response.paymentUrl;
+
+                const form = document.createElement("form");
+                form.method = "POST";
+                form.action = paymentUrl;
+
+                Object.entries(paymentData).forEach(([key, value]) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = key;
+                    input.value = value;
+                    form.appendChild(input);
+                });
+
+                document.body.appendChild(form);
+                form.submit();
+
+            } catch (error) {
+                alert("Invalid JSON response. Please check what you pasted.");
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>
