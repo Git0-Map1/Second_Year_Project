@@ -64,7 +64,10 @@ const createBooking = async (req, res) => {
       });
     }
 
-    if (property.deletionPending) {
+    if (
+      property.deletionPending ||
+      (property.deletionState && property.deletionState !== "active")
+    ) {
       return res.status(400).json({
         message: "This property is being deleted and cannot be booked.",
         success: false,
@@ -426,16 +429,20 @@ const verifyEsewaPayment = async (req, res) => {
         });
       }
 
-      return res.status(200).json({
-        success: true,
-        message: paymentResult.latePayment
-          ? "Payment received after booking expiry. Manual review is required."
-          : "Payment verified successfully.",
-        paymentStatus: "paid",
-        bookingStatus: paymentResult.booking.bookingStatus,
-        latePayment: paymentResult.latePayment,
-        booking: paymentResult.booking,
-      });
+      // return res.status(200).json({
+      //   success: true,
+      //   message: paymentResult.latePayment
+      //     ? "Payment received after booking expiry. Manual review is required."
+      //     : "Payment verified successfully.",
+      //   paymentStatus: "paid",
+      //   bookingStatus: paymentResult.booking.bookingStatus,
+      //   latePayment: paymentResult.latePayment,
+      //   booking: paymentResult.booking,
+      // });
+
+      return res.redirect(
+        `http://localhost:5173/payment-success?latePayment=${paymentResult.latePayment}`,
+      );
     }
 
     // Payment has not been confirmed
@@ -624,12 +631,7 @@ const handleEsewaFailure = async (req, res) => {
           },
         );
 
-        return res.status(200).json({
-          success: false,
-          message: "Payment failed. Property is now available again.",
-          paymentStatus: cancelledBooking.paymentStatus,
-          bookingStatus: cancelledBooking.bookingStatus,
-        });
+        return res.redirect("http://localhost:5173/payment-failed");
       }
 
       // Reload in case another process changed the booking

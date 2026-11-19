@@ -10,6 +10,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Properties from "./pages/Properties";
 import PropertyDetails from "./pages/PropertyDetails";
 import Booking from "./pages/Booking";
+import PaymentFailed from "./pages/PaymentFailed";
+import PaymentSuccess from "./pages/PaymentSuccess";
+
 
 function App(){
   return (
@@ -21,6 +24,8 @@ function App(){
         <Route path="/properties" element={<Properties/>}/>
         <Route path="/properties/:id" element={<PropertyDetails/>}/>
         <Route path="/booking/:id" element={<Booking />}></Route>
+        <Route path="/payment-failed" element={<PaymentFailed />}></Route>
+        <Route path="/payment-success" element={<PaymentSuccess />} />
 
         <Route path="/customer-dashboard" element={
           <ProtectedRoute allowedRole="customer">
