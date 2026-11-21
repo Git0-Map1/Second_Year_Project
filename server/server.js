@@ -29,11 +29,6 @@ app.use('/api/properties', propertyRoutes);
 app.use('/api/bookings', BookingRoutes);
 app.use('/api/seller-bookings', sellerBookingRoutes);
 
-// app.get("/api/properties",(req,res)=>{
-//     res.json([
-//         {id:1, title: "House in Kathmandu"}
-//     ])
-// })
 
 startBookingCron();
 startCloudinaryCleanupCron();

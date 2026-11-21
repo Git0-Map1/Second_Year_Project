@@ -61,6 +61,17 @@ const PropertySchema = new mongoose.Schema(
       },
     ],
 
+    lalpurja: {
+      imageUrl: {
+        type: String,
+        required: false,
+      },
+      publicId: {
+        type: String,
+        required: false,
+      },
+    },
+
     cleanupImages: [
       {
         imageUrl: {

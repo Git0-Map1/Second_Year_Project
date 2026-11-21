@@ -41,6 +41,47 @@ const uploadToCloudinary = (fileBuffer) => {
   });
 };
 
+const uploadDocumentToCloudinary = (fileBuffer) => {
+  return new Promise((resolve, reject) => {
+    if (!fileBuffer || !Buffer.isBuffer(fileBuffer)) {
+      return reject(new Error("Invalid document buffer"));
+    }
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "PrimeEstate/lalpurja",
+        resource_type: "raw",
+        type: "private",
+      },
+      (error, result) => {
+        if (error) {
+          return reject(error);
+        }
+
+        if (!result || !result.public_id || !result.secure_url) {
+          return reject(new Error("Document upload failed"));
+        }
+
+        resolve({
+          imageUrl: result.secure_url,
+          publicId: result.public_id,
+        });
+      },
+    );
+
+    const readableStream = Readable.from([fileBuffer]);
+
+    readableStream.on("error", (error) => {
+      uploadStream.destroy(error);
+      reject(error);
+    });
+
+    uploadStream.on("error", reject);
+
+    readableStream.pipe(uploadStream);
+  });
+};
+
 const deleteFromCloudinary = async (publicId) => {
   if (!publicId) {
     throw new Error("Cloudinary publicId is missing");
@@ -81,5 +122,6 @@ const deleteFromCloudinary = async (publicId) => {
 
 module.exports = {
   uploadToCloudinary,
+  uploadDocumentToCloudinary,
   deleteFromCloudinary,
 };

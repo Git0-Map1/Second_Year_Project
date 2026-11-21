@@ -86,8 +86,10 @@
   color: #333;
 }
 
+
 .booking-input-group input,
-.booking-input-group textarea {
+.booking-input-group textarea,
+.booking-input-group select {
   width: 100%;
   padding: 12px 14px;
   border: 1px solid #ccc;
@@ -97,10 +99,13 @@
   box-sizing: border-box;
   outline: none;
   transition: border-color 0.2s;
+  background-color: #fff;
 }
 
+
 .booking-input-group input:focus,
-.booking-input-group textarea:focus {
+.booking-input-group textarea:focus,
+.booking-input-group select:focus {
   border-color: #1b4332;
 }
 
@@ -158,6 +163,12 @@
 
 .confirm-booking-button:hover {
   background: #245a43;
+}
+
+.confirm-booking-button:disabled {
+  background: #789087;
+  cursor: not-allowed;
+  opacity: 0.8;
 }
 
 /* Responsive Design */

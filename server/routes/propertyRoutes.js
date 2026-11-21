@@ -1,91 +1,101 @@
 const router = require("express").Router();
 
-const { createProperty, getAllProperties, getPropertyById, getMyProperties, updateProperty,
-     deleteProperty, approveProperty, rejectProperty, getPendingProperties,
-     getAllPropertiesForAdmin} = require("../controllers/propertyController");
+const {
+  createProperty,
+  getAllProperties,
+  getPropertyById,
+  getMyProperties,
+  updateProperty,
+  deleteProperty,
+  approveProperty,
+  rejectProperty,
+  getPendingProperties,
+  getAllPropertiesForAdmin,
+} = require("../controllers/propertyController");
 
-const { authenticateUser, authorizeRoles} = require("../middleware/authMiddleware");
+const {
+  authenticateUser,
+  authorizeRoles,
+} = require("../middleware/authMiddleware");
 
 const { upload } = require("../config/multer");
 
 //anyone can view properties
-router.get(
-    "/",
-    getAllProperties
-)
+router.get("/", getAllProperties);
 
 //seller views their own property
 router.get(
-    "/my-properties",
-    authenticateUser,
-    authorizeRoles("seller"),
-    getMyProperties
-)
+  "/my-properties",
+  authenticateUser,
+  authorizeRoles("seller"),
+  getMyProperties,
+);
 
 //admin view the property
 router.get(
-    "/pending",
-    authenticateUser,
-    authorizeRoles("admin"),
-    getPendingProperties
-)
+  "/pending",
+  authenticateUser,
+  authorizeRoles("admin"),
+  getPendingProperties,
+);
 
 //anyone can view property by id
-router.get(
-    "/:id",
-    getPropertyById
-)
+router.get("/:id", getPropertyById);
 
 //admin view properties (status doesn't matter)
 router.get(
-    "/admin/all",
-    authenticateUser,
-    authorizeRoles("admin"),
-    getAllPropertiesForAdmin
-)
+  "/admin/all",
+  authenticateUser,
+  authorizeRoles("admin"),
+  getAllPropertiesForAdmin,
+);
 
 //only authenticated sellers can add properties
 router.post(
-    "/", 
-    authenticateUser,
-    authorizeRoles("seller"),
-    upload.array("images",10),
-    createProperty
+  "/",
+  authenticateUser,
+  authorizeRoles("seller"),
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "lalpurja", maxCount: 1 },
+  ]),
+  createProperty,
 );
 
 // only sellers can update their own properties
 router.patch(
-    "/:id",
-    authenticateUser,
-    authorizeRoles("seller"),
-    upload.array("images",10),
-    updateProperty
-)
+  "/:id",
+  authenticateUser,
+  authorizeRoles("seller"),
+  upload.fields([
+    { name: "images", maxCount: 10 },
+    { name: "lalpurja", maxCount: 1 },
+  ]),
+  updateProperty,
+);
 
 //delete the property
 router.delete(
-    "/:id",
-    authenticateUser,
-    authorizeRoles("seller"),
-    deleteProperty
-)
+  "/:id",
+  authenticateUser,
+  authorizeRoles("seller"),
+  deleteProperty,
+);
 
 // admin approve the property before listing
 router.patch(
-    "/:id/approve",
-    authenticateUser,
-    authorizeRoles("admin"),
-    approveProperty
-)
+  "/:id/approve",
+  authenticateUser,
+  authorizeRoles("admin"),
+  approveProperty,
+);
 
 //admin reject the property
 router.patch(
-    "/:id/reject",
-    authenticateUser,
-    authorizeRoles("admin"),
-    rejectProperty
-)
-
-
+  "/:id/reject",
+  authenticateUser,
+  authorizeRoles("admin"),
+  rejectProperty,
+);
 
 module.exports = router;

@@ -1,0 +1,192 @@
+
+/* Main Page */
+.property-form-page {
+  min-height: 100vh;
+  padding: 50px 20px;
+  background-color: #f5f7fa;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+/* Form Container */
+.property-form-container {
+  width: 100%;
+  max-width: 850px;
+  padding: 35px 40px;
+  background-color: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+}
+
+/* Heading */
+.property-form-container h2 {
+  font-size: 28px;
+  color: #1e293b;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.property-form-container p {
+  color: #64748b;
+  text-align: center;
+  margin-bottom: 30px;
+  font-size: 15px;
+}
+
+/* Form Layout */
+.property-form-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Individual Form Groups */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.form-group label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+/* Inputs, Selects and Textareas */
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #1e293b;
+  background-color: #ffffff;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.form-group textarea {
+  min-height: 120px;
+  resize: vertical;
+}
+
+/* Paired Fields */
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+/* File Inputs */
+.form-group input[type="file"] {
+  padding: 10px;
+  background-color: #f8fafc;
+  cursor: pointer;
+}
+
+.form-group input[type="file"]::file-selector-button {
+  padding: 8px 12px;
+  margin-right: 12px;
+  border: none;
+  border-radius: 5px;
+  background-color: #e2e8f0;
+  color: #334155;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.form-group input[type="file"]::file-selector-button:hover {
+  background-color: #cbd5e1;
+}
+
+/* Helper Text */
+.form-group small {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* Success and Error Messages */
+.form-message {
+  padding: 12px 15px;
+  border-radius: 7px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.form-message-success {
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #86efac;
+}
+
+.form-message-error {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+/* Submit Button */
+.property-form-container button[type="submit"] {
+  width: 100%;
+  padding: 14px;
+  margin-top: 10px;
+  border: none;
+  border-radius: 7px;
+  background-color: #1e3a8a;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.property-form-container button[type="submit"]:hover {
+  background-color: #1d4ed8;
+}
+
+.property-form-container button[type="submit"]:disabled {
+  background-color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .property-form-page {
+    padding: 25px 15px;
+  }
+
+  .property-form-container {
+    padding: 25px 20px;
+  }
+
+  .property-form-container h2 {
+    font-size: 24px;
+  }
+}
+
+@media (max-width: 550px) {
+  .form-row {
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .property-form-container {
+    padding: 22px 16px;
+  }
+
+  .property-form-container h2 {
+    font-size: 22px;
+  }
+}

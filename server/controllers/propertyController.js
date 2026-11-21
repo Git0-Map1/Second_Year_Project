@@ -1,13 +1,68 @@
 const Property = require("../models/Property");
 const Booking = require("../models/Booking");
 const mongoose = require("mongoose");
-const { uploadToCloudinary } = require("../utils/cloudinaryUpload");
-const { deleteFromCloudinary } = require("../utils/cloudinaryUpload");
+
+const {
+  uploadToCloudinary,
+  uploadDocumentToCloudinary,
+  deleteFromCloudinary,
+} = require("../utils/cloudinaryUpload");
+
 const CloudinaryCleanup = require("../models/CloudinaryCleanup");
 
-//sellers add new property
+// HELPER: Save failed Cloudinary deletion for retry
+
+const queueCloudinaryCleanup = async (image, propertyId = null, error) => {
+  if (!image?.publicId) {
+    throw new Error("Invalid Cloudinary cleanup image");
+  }
+
+  await CloudinaryCleanup.updateOne(
+    { publicId: image.publicId },
+    {
+      $setOnInsert: {
+        publicId: image.publicId,
+        imageUrl: image.imageUrl,
+      },
+      $set: {
+        ...(propertyId && { propertyId }),
+        lastError: error?.message || "Cloudinary deletion failed",
+        nextAttemptAt: new Date(),
+      },
+    },
+    { upsert: true },
+  );
+};
+
+// HELPER: Delete uploaded assets or queue failed cleanup
+
+const cleanupUploadedAssets = async (assets) => {
+  const results = await Promise.allSettled(
+    assets.map((asset) => deleteFromCloudinary(asset.publicId)),
+  );
+
+  for (let i = 0; i < results.length; i++) {
+    if (results[i].status === "rejected") {
+      const asset = assets[i];
+
+      try {
+        await queueCloudinaryCleanup(asset, null, results[i].reason);
+      } catch (error) {
+        console.error(
+          "Failed to queue Cloudinary cleanup:",
+          asset.publicId,
+          error.message,
+        );
+      }
+    }
+  }
+};
+
+// CREATE PROPERTY
+
 const createProperty = async (req, res) => {
   let uploadedImages = [];
+  let uploadedLalpurja = null;
   let propertySaved = false;
 
   try {
@@ -24,19 +79,28 @@ const createProperty = async (req, res) => {
       bathrooms,
     } = req.body;
 
-    const files = req.files || [];
+    const files = req.files?.images || [];
+    const lalpurjaFile = req.files?.lalpurja?.[0];
 
-    // Upload all images
+    if (!lalpurjaFile) {
+      return res.status(400).json({
+        message: "Lalpurja document is required",
+        success: false,
+      });
+    }
+
+    // Upload Lalpurja
+    uploadedLalpurja = await uploadDocumentToCloudinary(lalpurjaFile.buffer);
+
+    // Upload property images
     const uploadResults = await Promise.allSettled(
       files.map((file) => uploadToCloudinary(file.buffer)),
     );
 
-    // Collect successfully uploaded images
     uploadedImages = uploadResults
       .filter((result) => result.status === "fulfilled")
       .map((result) => result.value);
 
-    // Check if any upload failed
     const failedUpload = uploadResults.find(
       (result) => result.status === "rejected",
     );
@@ -45,6 +109,7 @@ const createProperty = async (req, res) => {
       throw failedUpload.reason;
     }
 
+    // Create property
     const property = new Property({
       title,
       description,
@@ -57,6 +122,10 @@ const createProperty = async (req, res) => {
       bedrooms,
       bathrooms,
       images: uploadedImages,
+      lalpurja: {
+        imageUrl: uploadedLalpurja.imageUrl,
+        publicId: uploadedLalpurja.publicId,
+      },
       seller: req.user._id,
     });
 
@@ -71,47 +140,14 @@ const createProperty = async (req, res) => {
   } catch (err) {
     console.error("Create Property Error:", err);
 
-    // Clean up uploaded images if property creation fails
-    if (!propertySaved && uploadedImages.length > 0) {
-      const cleanupResults = await Promise.allSettled(
-        uploadedImages.map((image) => deleteFromCloudinary(image.publicId)),
-      );
+    // Never delete assets after property has been saved
+    if (!propertySaved) {
+      const assetsToClean = [
+        ...uploadedImages,
+        ...(uploadedLalpurja ? [uploadedLalpurja] : []),
+      ];
 
-      for (let i = 0; i < cleanupResults.length; i++) {
-        const result = cleanupResults[i];
-
-        if (result.status === "rejected") {
-          const image = uploadedImages[i];
-
-          console.error(
-            "Cloudinary cleanup failed:",
-            image.publicId,
-            result.reason.message,
-          );
-
-          try {
-            await CloudinaryCleanup.updateOne(
-              { publicId: image.publicId },
-              {
-                $setOnInsert: {
-                  publicId: image.publicId,
-                  imageUrl: image.imageUrl,
-                },
-                $set: {
-                  lastError: result.reason.message,
-                  nextAttemptAt: new Date(),
-                },
-              },
-              { upsert: true },
-            );
-          } catch (cleanupSaveError) {
-            console.error(
-              "Failed to save Cloudinary cleanup record:",
-              cleanupSaveError.message,
-            );
-          }
-        }
-      }
+      await cleanupUploadedAssets(assetsToClean);
     }
 
     return res.status(500).json({
@@ -121,7 +157,7 @@ const createProperty = async (req, res) => {
   }
 };
 
-//getting the property or customer view point
+// GET ALL AVAILABLE PROPERTIES
 
 const getAllProperties = async (req, res) => {
   try {
@@ -143,8 +179,6 @@ const getAllProperties = async (req, res) => {
       limit = 10,
     } = req.query;
 
-    //validation
-    //validate property type
     const validPropertyTypes = ["house", "land", "apartment", "commercial"];
 
     if (propertyType && !validPropertyTypes.includes(propertyType)) {
@@ -157,10 +191,20 @@ const getAllProperties = async (req, res) => {
     if (listingType && !["sale", "rent"].includes(listingType)) {
       return res.status(400).json({
         message: "Invalid listing type",
+        success: false,
       });
     }
 
-    // Validate numeric query parameters
+    if (
+      areaUnit &&
+      !["aana", "ropani", "sqft", "sqm", "dhur", "katha"].includes(areaUnit)
+    ) {
+      return res.status(400).json({
+        message: "Invalid area unit",
+        success: false,
+      });
+    }
+
     const numericFields = [
       "minPrice",
       "maxPrice",
@@ -195,7 +239,6 @@ const getAllProperties = async (req, res) => {
       });
     }
 
-    // Validate minimum and maximum ranges
     const ranges = [
       ["minPrice", "maxPrice"],
       ["minArea", "maxArea"],
@@ -211,34 +254,27 @@ const getAllProperties = async (req, res) => {
       ) {
         return res.status(400).json({
           message: `${min} cannot be greater than ${max}`,
+          success: false,
         });
       }
     }
 
-    // Only show available properties
     const filter = {
       status: "available",
+      $or: [{ deletionState: "active" }, { deletionState: { $exists: false } }],
     };
 
-    // Search by location (case-insensitive)
     if (location) {
       filter.location = {
-        $regex: location,
+        $regex: location.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
         $options: "i",
       };
     }
 
-    // Filter by property type
-    if (propertyType) {
-      filter.propertyType = propertyType;
-    }
+    if (propertyType) filter.propertyType = propertyType;
+    if (listingType) filter.listingType = listingType;
+    if (areaUnit) filter.areaUnit = areaUnit;
 
-    // Filter by listing type
-    if (listingType) {
-      filter.listingType = listingType;
-    }
-
-    // Filter by price range
     if (minPrice !== undefined || maxPrice !== undefined) {
       filter.price = {};
 
@@ -251,12 +287,6 @@ const getAllProperties = async (req, res) => {
       }
     }
 
-    // Filter by area unit
-    if (areaUnit) {
-      filter.areaUnit = areaUnit;
-    }
-
-    // Filter by area range
     if (minArea !== undefined || maxArea !== undefined) {
       filter.area = {};
 
@@ -269,9 +299,9 @@ const getAllProperties = async (req, res) => {
       }
     }
 
-    //filter by bedrooms
     if (minBedrooms !== undefined || maxBedrooms !== undefined) {
       filter.bedrooms = {};
+
       if (minBedrooms !== undefined) {
         filter.bedrooms.$gte = Number(minBedrooms);
       }
@@ -281,7 +311,6 @@ const getAllProperties = async (req, res) => {
       }
     }
 
-    //filter by bathrooms
     if (minBathrooms !== undefined || maxBathrooms !== undefined) {
       filter.bathrooms = {};
 
@@ -294,29 +323,21 @@ const getAllProperties = async (req, res) => {
       }
     }
 
-    // Pagination validation
     const currentPage = Math.max(1, parseInt(page, 10) || 1);
+
     const itemsPerPage = Math.min(50, Math.max(1, parseInt(limit, 10) || 10));
 
     const skip = (currentPage - 1) * itemsPerPage;
 
-    // Sorting
     let sortOption = { createdAt: -1 };
 
-    if (sort === "price_asc") {
-      sortOption = { price: 1 };
-    } else if (sort === "price_desc") {
-      sortOption = { price: -1 };
-    } else if (sort === "newest") {
-      sortOption = { createdAt: -1 };
-    } else if (sort === "oldest") {
-      sortOption = { createdAt: 1 };
-    }
+    if (sort === "price_asc") sortOption = { price: 1 };
+    if (sort === "price_desc") sortOption = { price: -1 };
+    if (sort === "newest") sortOption = { createdAt: -1 };
+    if (sort === "oldest") sortOption = { createdAt: 1 };
 
-    // Get total matching properties
     const totalProperties = await Property.countDocuments(filter);
 
-    // Get filtered properties
     const properties = await Property.find(filter)
       .populate("seller", "name email")
       .sort(sortOption)
@@ -341,6 +362,8 @@ const getAllProperties = async (req, res) => {
   }
 };
 
+// GET PROPERTY BY ID
+
 const getPropertyById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -355,6 +378,7 @@ const getPropertyById = async (req, res) => {
     const property = await Property.findOne({
       _id: id,
       status: "available",
+      $or: [{ deletionState: "active" }, { deletionState: { $exists: false } }],
     }).populate("seller", "name email");
 
     if (!property) {
@@ -369,7 +393,7 @@ const getPropertyById = async (req, res) => {
       property,
     });
   } catch (err) {
-    console.error("Get Property Error", err);
+    console.error("Get Property Error:", err);
 
     return res.status(500).json({
       message: "Internal Server Error",
@@ -378,7 +402,8 @@ const getPropertyById = async (req, res) => {
   }
 };
 
-//seller getting their own properties
+// SELLER: GET MY PROPERTIES
+
 const getMyProperties = async (req, res) => {
   try {
     const properties = await Property.find({
@@ -391,7 +416,7 @@ const getMyProperties = async (req, res) => {
       properties,
     });
   } catch (err) {
-    console.error("Get Properties Error", err);
+    console.error("Get My Properties Error:", err);
 
     return res.status(500).json({
       message: "Internal Server Error",
@@ -400,12 +425,13 @@ const getMyProperties = async (req, res) => {
   }
 };
 
-// update property by seller
-
+// SELLER: UPDATE PROPERTY
 const updateProperty = async (req, res) => {
   let uploadedImages = [];
-  let propertySaved = false;
+  let uploadedLalpurja = null;
+  let oldAssets = [];
   let lockedPropertyId = null;
+  let propertySaved = false;
 
   try {
     const { id } = req.params;
@@ -416,6 +442,8 @@ const updateProperty = async (req, res) => {
         success: false,
       });
     }
+
+    // Acquire update lock
     const property = await Property.findOneAndUpdate(
       {
         _id: id,
@@ -430,23 +458,34 @@ const updateProperty = async (req, res) => {
           deletionState: "updating",
         },
       },
-      {
-        new: true,
-      },
+      { new: true },
     );
 
-    if (property) {
-      lockedPropertyId = property._id;
-    }
-
     if (!property) {
-      return res.status(404).json({
-        message: "Property not found or you are not authorized to update it",
+      const existingProperty = await Property.findById(id);
+
+      if (!existingProperty) {
+        return res.status(404).json({
+          message: "Property Not Found",
+          success: false,
+        });
+      }
+
+      if (existingProperty.seller.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          message: "You are not authorized to update this property",
+          success: false,
+        });
+      }
+
+      return res.status(409).json({
+        message: "Property is already being updated or deleted",
         success: false,
       });
     }
 
-    // Update allowed property fields
+    lockedPropertyId = property._id;
+
     const allowedFields = [
       "title",
       "description",
@@ -469,7 +508,7 @@ const updateProperty = async (req, res) => {
       }
     }
 
-    // Read image public IDs selected for removal
+    // Validate images selected for removal
     let removeImagePublicIds = [];
 
     if (req.body.removeImagePublicIds !== undefined) {
@@ -478,9 +517,9 @@ const updateProperty = async (req, res) => {
           typeof req.body.removeImagePublicIds === "string"
             ? JSON.parse(req.body.removeImagePublicIds)
             : req.body.removeImagePublicIds;
-      } catch (error) {
+      } catch {
         return res.status(400).json({
-          message: "Invalid removeImagePublicIds format. Send a JSON array.",
+          message: "Invalid removeImagePublicIds format",
           success: false,
         });
       }
@@ -499,7 +538,6 @@ const updateProperty = async (req, res) => {
       }
     }
 
-    // Check that requested images belong to this property
     const idsToRemove = [...new Set(removeImagePublicIds)];
 
     const imagesToRemove = property.images.filter((image) =>
@@ -508,30 +546,58 @@ const updateProperty = async (req, res) => {
 
     if (imagesToRemove.length !== idsToRemove.length) {
       return res.status(400).json({
-        message: "One or more selected images were not found in this property",
+        message: "One or more selected images were not found",
         success: false,
       });
     }
 
-    // Keep images that were not selected for removal
     if (idsToRemove.length > 0) {
       property.images = property.images.filter(
         (image) => !idsToRemove.includes(image.publicId),
       );
 
+      oldAssets.push(...imagesToRemove);
       hasUpdates = true;
     }
 
-    // Upload newly added images
-    const files = req.files || [];
+    // Replacement Lalpurja
+    const lalpurjaFile = req.files?.lalpurja?.[0];
 
-    for (const file of files) {
-      const uploadedImage = await uploadToCloudinary(file.buffer);
+    if (lalpurjaFile) {
+      uploadedLalpurja = await uploadDocumentToCloudinary(lalpurjaFile.buffer);
 
-      uploadedImages.push({
-        imageUrl: uploadedImage.imageUrl,
-        publicId: uploadedImage.publicId,
-      });
+      if (property.lalpurja?.publicId) {
+        oldAssets.push({
+          imageUrl: property.lalpurja.imageUrl,
+          publicId: property.lalpurja.publicId,
+        });
+      }
+
+      property.lalpurja = {
+        imageUrl: uploadedLalpurja.imageUrl,
+        publicId: uploadedLalpurja.publicId,
+      };
+
+      hasUpdates = true;
+    }
+
+    // Upload new property images
+    const files = req.files?.images || [];
+
+    const uploadResults = await Promise.allSettled(
+      files.map((file) => uploadToCloudinary(file.buffer)),
+    );
+
+    uploadedImages = uploadResults
+      .filter((result) => result.status === "fulfilled")
+      .map((result) => result.value);
+
+    const failedUpload = uploadResults.find(
+      (result) => result.status === "rejected",
+    );
+
+    if (failedUpload) {
+      throw failedUpload.reason;
     }
 
     if (uploadedImages.length > 0) {
@@ -539,7 +605,6 @@ const updateProperty = async (req, res) => {
       hasUpdates = true;
     }
 
-    // Check whether anything was updated
     if (!hasUpdates) {
       return res.status(400).json({
         message: "No valid fields provided for update",
@@ -547,114 +612,110 @@ const updateProperty = async (req, res) => {
       });
     }
 
-    // Save property changes and queue images for deletion
+    // Require admin verification again
     property.status = "pending";
 
-    property.cleanupImages = property.cleanupImages || [];
+    // Save updated property
+    await property.save();
+    propertySaved = true;
 
-    for (const image of imagesToRemove) {
-      const alreadyQueued = property.cleanupImages.some(
-        (item) => item.publicId === image.publicId,
-      );
+    // Old assets are no longer referenced by the property.
+    // Attempt to delete them from Cloudinary.
+    const deletionResults = await Promise.allSettled(
+      oldAssets.map((asset) => deleteFromCloudinary(asset.publicId)),
+    );
 
-      if (!alreadyQueued) {
-        property.cleanupImages.push({
-          imageUrl: image.imageUrl,
-          publicId: image.publicId,
-          failedAt: new Date(),
+    const successfullyDeletedIds = [];
+    const failedAssets = [];
+
+    for (let i = 0; i < deletionResults.length; i++) {
+      const result = deletionResults[i];
+      const asset = oldAssets[i];
+
+      if (result.status === "fulfilled") {
+        successfullyDeletedIds.push(asset.publicId);
+      } else {
+        failedAssets.push({
+          asset,
+          error: result.reason,
         });
       }
     }
 
-    await property.save();
-    propertySaved = true;
-
-    // Attempt Cloudinary deletion
-    const deletionResults = await Promise.allSettled(
-      imagesToRemove.map((image) => deleteFromCloudinary(image.publicId)),
-    );
-
-    // Remove successfully deleted images from cleanup queue
-    const successfullyDeletedIds = deletionResults
-      .map((result, index) =>
-        result.status === "fulfilled" ? imagesToRemove[index].publicId : null,
-      )
-      .filter(Boolean);
-
+    // Remove existing centralized cleanup records
     if (successfullyDeletedIds.length > 0) {
-      property.cleanupImages = property.cleanupImages.filter(
-        (image) => !successfullyDeletedIds.includes(image.publicId),
-      );
+      await CloudinaryCleanup.deleteMany({
+        publicId: { $in: successfullyDeletedIds },
+      });
+    }
+
+    // Queue failed deletions
+    const failedQueueAssets = [];
+
+    for (const item of failedAssets) {
+      try {
+        await queueCloudinaryCleanup(item.asset, property._id, item.error);
+      } catch (queueError) {
+        console.error(
+          "Failed to queue old asset:",
+          item.asset.publicId,
+          queueError.message,
+        );
+
+        failedQueueAssets.push(item.asset);
+      }
+    }
+
+    // Fallback storage if the centralized queue itself fails
+    if (failedQueueAssets.length > 0) {
+      property.cleanupImages = property.cleanupImages || [];
+
+      for (const asset of failedQueueAssets) {
+        const exists = property.cleanupImages.some(
+          (item) => item.publicId === asset.publicId,
+        );
+
+        if (!exists) {
+          property.cleanupImages.push({
+            imageUrl: asset.imageUrl,
+            publicId: asset.publicId,
+            failedAt: new Date(),
+          });
+        }
+      }
 
       await property.save();
     }
 
-    // Identify failed deletions
-    const failedDeletions = deletionResults.filter(
-      (result) => result.status === "rejected",
-    );
-
     return res.status(200).json({
       message:
-        failedDeletions.length > 0
-          ? "Property updated, but some images are queued for Cloudinary cleanup"
+        failedAssets.length > 0
+          ? "Property updated, but some old assets require Cloudinary cleanup"
           : "Property updated successfully",
       success: true,
-      cloudinaryCleanupWarning: failedDeletions.length > 0,
-      pendingCleanupImages: property.cleanupImages.length,
+      cloudinaryCleanupWarning: failedAssets.length > 0,
+      pendingCleanupImages: failedAssets.length,
       property,
     });
   } catch (err) {
     console.error("Update Property Error:", err);
 
-    // Clean up newly uploaded images if property saving fails
-    if (!propertySaved && uploadedImages.length > 0) {
-      const cleanupResults = await Promise.allSettled(
-        uploadedImages.map((image) => deleteFromCloudinary(image.publicId)),
-      );
+    // Clean up newly uploaded assets only if property was not saved
+    if (!propertySaved) {
+      const assetsToClean = [
+        ...uploadedImages,
+        ...(uploadedLalpurja ? [uploadedLalpurja] : []),
+      ];
 
-      for (let i = 0; i < cleanupResults.length; i++) {
-        const result = cleanupResults[i];
-
-        if (result.status === "rejected") {
-          const image = uploadedImages[i];
-
-          try {
-            await CloudinaryCleanup.updateOne(
-              { publicId: image.publicId },
-              {
-                $setOnInsert: {
-                  publicId: image.publicId,
-                  imageUrl: image.imageUrl,
-                },
-                $set: {
-                  lastError: result.reason.message,
-                  nextAttemptAt: new Date(),
-                },
-              },
-              { upsert: true },
-            );
-
-            console.error(
-              "Cloudinary cleanup failed and was queued:",
-              image.publicId,
-            );
-          } catch (cleanupSaveError) {
-            console.error(
-              "Failed to save Cloudinary cleanup record:",
-              cleanupSaveError.message,
-            );
-          }
-        }
-      }
+      await cleanupUploadedAssets(assetsToClean);
     }
 
     return res.status(500).json({
-      message: "Internal Server Error",
-      error: err.message,
+      message: "Property update failed",
       success: false,
     });
   } finally {
+    // Release only the update lock acquired by this request
     if (lockedPropertyId) {
       try {
         await Property.updateOne(
@@ -678,7 +739,7 @@ const updateProperty = async (req, res) => {
   }
 };
 
-//delete property
+// SELLER: DELETE PROPERTY
 
 const deleteProperty = async (req, res) => {
   let lockedPropertyId = null;
@@ -693,6 +754,7 @@ const deleteProperty = async (req, res) => {
       });
     }
 
+    // Acquire deletion lock
     const property = await Property.findOneAndUpdate(
       {
         _id: id,
@@ -707,9 +769,7 @@ const deleteProperty = async (req, res) => {
           deletionState: "deleting",
         },
       },
-      {
-        new: true,
-      },
+      { new: true },
     );
 
     if (!property) {
@@ -737,7 +797,7 @@ const deleteProperty = async (req, res) => {
 
     lockedPropertyId = property._id;
 
-    // Check active bookings
+    // Protect properties with active bookings or payments
     const activeBooking = await Booking.findOne({
       property: id,
       $or: [
@@ -758,99 +818,107 @@ const deleteProperty = async (req, res) => {
       });
     }
 
-    // Collect all images requiring deletion
-    const allImages = [...property.images, ...(property.cleanupImages || [])];
+    // Collect all assets, including legacy fallback assets
+    // and assets already waiting in the centralized cleanup queue.
+    const existingCleanupRecords = await CloudinaryCleanup.find({
+      propertyId: property._id,
+    });
 
-    const uniqueImages = [
-      ...new Map(allImages.map((image) => [image.publicId, image])).values(),
+    const allAssets = [
+      ...(property.images || []),
+      ...(property.cleanupImages || []),
+      ...(property.lalpurja?.publicId ? [property.lalpurja] : []),
+      ...existingCleanupRecords.map((record) => ({
+        imageUrl: record.imageUrl,
+        publicId: record.publicId,
+      })),
+    ];
+
+    // Remove duplicate Cloudinary public IDs
+    const uniqueAssets = [
+      ...new Map(
+        allAssets
+          .filter((asset) => asset.publicId)
+          .map((asset) => [asset.publicId, asset]),
+      ).values(),
     ];
 
     // Attempt Cloudinary deletion
     const results = await Promise.allSettled(
-      uniqueImages.map((image) => deleteFromCloudinary(image.publicId)),
+      uniqueAssets.map((asset) => deleteFromCloudinary(asset.publicId)),
     );
 
-    const failedImages = results
-      .map((result, index) =>
-        result.status === "rejected"
-          ? {
-              image: uniqueImages[index],
-              error: result.reason,
-            }
-          : null,
-      )
-      .filter(Boolean);
+    const successfulIds = [];
+    const failedAssets = [];
 
-    // Remove cleanup records for successfully deleted images
-    const successfulIds = results
-      .map((result, index) =>
-        result.status === "fulfilled" ? uniqueImages[index].publicId : null,
-      )
-      .filter(Boolean);
-
-    if (successfulIds.length > 0) {
-      await CloudinaryCleanup.deleteMany({
-        publicId: { $in: successfulIds },
-      });
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].status === "fulfilled") {
+        successfulIds.push(uniqueAssets[i].publicId);
+      } else {
+        failedAssets.push({
+          asset: uniqueAssets[i],
+          error: results[i].reason,
+        });
+      }
     }
 
-    // Save failed deletions in centralized cleanup collection
+    if (successfullyDeletedIds.length > 0) {
+      try {
+        await CloudinaryCleanup.deleteMany({
+          publicId: { $in: successfullyDeletedIds },
+        });
+      } catch (cleanupRecordError) {
+        console.error(
+          "Failed to remove completed Cloudinary cleanup records:",
+          cleanupRecordError.message,
+        );
+      }
+    }
+
     let cleanupSaveFailed = false;
 
-    for (const item of failedImages) {
+    // Save failed deletions in centralized cleanup collection
+    for (const item of failedAssets) {
       try {
-        await CloudinaryCleanup.updateOne(
-          { publicId: item.image.publicId },
-          {
-            $setOnInsert: {
-              publicId: item.image.publicId,
-              imageUrl: item.image.imageUrl,
-            },
-            $set: {
-              propertyId: property._id,
-              lastError: item.error?.message || "Cloudinary deletion failed",
-              nextAttemptAt: new Date(),
-            },
-          },
-          { upsert: true },
-        );
+        await queueCloudinaryCleanup(item.asset, property._id, item.error);
       } catch (error) {
         cleanupSaveFailed = true;
 
         console.error(
           "Failed to save cleanup record:",
-          item.image.publicId,
+          item.asset.publicId,
           error.message,
         );
       }
     }
 
-    // Preserve property before creating cleanup records
-    if (failedImages.length > 0) {
+    // If any deletion failed, retain property for cron cleanup
+    if (failedAssets.length > 0) {
       property.deletionPending = true;
       property.deletionState = "cleanup_pending";
 
-      // Store every failed image as a fallback
-      property.cleanupImages = failedImages.map((item) => item.image);
+      // Keep fallback copies if cleanup records could not be saved
+      property.cleanupImages = cleanupSaveFailed
+        ? failedAssets.map((item) => ({
+            imageUrl: item.asset.imageUrl,
+            publicId: item.asset.publicId,
+            failedAt: new Date(),
+          }))
+        : [];
 
-      // Save property first
       await property.save();
-
-      // Clear fallback only when all cleanup records are saved
-      if (!cleanupSaveFailed) {
-        property.cleanupImages = [];
-        await property.save();
-      }
 
       return res.status(500).json({
         message:
-          "Some images could not be deleted. Property was retained for cleanup retry.",
+          "Some assets could not be deleted. Property was retained for cleanup retry.",
         success: false,
-        failedDeletions: failedImages.length,
+        failedDeletions: failedAssets.length,
+        cleanupRecordsSaved: !cleanupSaveFailed,
       });
     }
 
-    // All images deleted successfully
+    // All Cloudinary assets were deleted.
+    // Permanently delete only while holding the deletion lock.
     const deletedProperty = await Property.findOneAndDelete({
       _id: id,
       seller: req.user._id,
@@ -865,7 +933,7 @@ const deleteProperty = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Property and its images deleted successfully",
+      message: "Property and its assets deleted successfully",
       success: true,
     });
   } catch (error) {
@@ -876,6 +944,9 @@ const deleteProperty = async (req, res) => {
       success: false,
     });
   } finally {
+    // IMPORTANT:
+    // Do not release cleanup_pending.
+    // Only release a lock that is still in deleting state.
     if (lockedPropertyId) {
       try {
         await Property.updateOne(
@@ -899,7 +970,8 @@ const deleteProperty = async (req, res) => {
   }
 };
 
-//admin approve property
+// ADMIN: APPROVE PROPERTY
+
 const approveProperty = async (req, res) => {
   try {
     const { id } = req.params;
@@ -915,9 +987,15 @@ const approveProperty = async (req, res) => {
       {
         _id: id,
         status: "pending",
+        $or: [
+          { deletionState: "active" },
+          { deletionState: { $exists: false } },
+        ],
       },
       {
-        $set: { status: "available" },
+        $set: {
+          status: "available",
+        },
       },
       {
         new: true,
@@ -938,7 +1016,7 @@ const approveProperty = async (req, res) => {
       property,
     });
   } catch (err) {
-    console.log("Approve Property Error", err);
+    console.error("Approve Property Error:", err);
 
     return res.status(500).json({
       message: "Internal Server Error",
@@ -947,7 +1025,7 @@ const approveProperty = async (req, res) => {
   }
 };
 
-//reject property by admin
+// ADMIN: REJECT PROPERTY
 
 const rejectProperty = async (req, res) => {
   try {
@@ -964,9 +1042,15 @@ const rejectProperty = async (req, res) => {
       {
         _id: id,
         status: "pending",
+        $or: [
+          { deletionState: "active" },
+          { deletionState: { $exists: false } },
+        ],
       },
       {
-        $set: { status: "rejected" },
+        $set: {
+          status: "rejected",
+        },
       },
       {
         new: true,
@@ -987,7 +1071,7 @@ const rejectProperty = async (req, res) => {
       property,
     });
   } catch (err) {
-    console.log("Rejected Property Error", err);
+    console.error("Reject Property Error:", err);
 
     return res.status(500).json({
       message: "Internal Server Error",
@@ -996,12 +1080,13 @@ const rejectProperty = async (req, res) => {
   }
 };
 
-//viewing pending requests by admin
+// ADMIN: GET PENDING PROPERTIES
 
 const getPendingProperties = async (req, res) => {
   try {
     const properties = await Property.find({
       status: "pending",
+      $or: [{ deletionState: "active" }, { deletionState: { $exists: false } }],
     })
       .populate("seller", "name email")
       .sort({ createdAt: -1 });
@@ -1012,7 +1097,7 @@ const getPendingProperties = async (req, res) => {
       properties,
     });
   } catch (err) {
-    console.log("Getting Pending Properties Error", err);
+    console.error("Get Pending Properties Error:", err);
 
     return res.status(500).json({
       message: "Internal Server Error",
@@ -1021,7 +1106,8 @@ const getPendingProperties = async (req, res) => {
   }
 };
 
-// admin view all the property
+// ADMIN: GET ALL PROPERTIES
+
 const getAllPropertiesForAdmin = async (req, res) => {
   try {
     const properties = await Property.find()
@@ -1034,7 +1120,7 @@ const getAllPropertiesForAdmin = async (req, res) => {
       properties,
     });
   } catch (err) {
-    console.error("Admin Get All Properties Error", err);
+    console.error("Admin Get All Properties Error:", err);
 
     return res.status(500).json({
       message: "Internal Server Error",
@@ -1042,6 +1128,8 @@ const getAllPropertiesForAdmin = async (req, res) => {
     });
   }
 };
+
+// EXPORTS
 
 module.exports = {
   createProperty,
