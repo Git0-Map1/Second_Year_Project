@@ -17,10 +17,9 @@ function PropertyDetails() {
       try {
         const response = await api.get(`/api/properties/${id}`);
 
-        console.log("API RESPONSE:", response.data);
         setProperty(response.data.property);
       } catch (err) {
-        console.log("Error:", err);
+        
         setError(
           err.response?.data?.message || "Failed to load property details",
         );

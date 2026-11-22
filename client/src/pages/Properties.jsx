@@ -17,10 +17,7 @@ function Properties() {
         const response = await api.get("/api/properties");
 
         setProperties(response.data.properties || []);
-        console.log(
-          "first property images:",
-          response.data.properties?.[0]?.images
-        )
+        
       } catch (err) {
         setError(err.response?.data?.message || "Failed to load properties");
       } finally {

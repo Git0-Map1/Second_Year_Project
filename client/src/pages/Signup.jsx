@@ -1,5 +1,7 @@
 import { useState } from "react";
 import "./Signup.css";
+import { Link } from "react-router-dom";
+import api from "../api/axios";
 
 function Signup() {
   const [name, setName] = useState("");
@@ -9,6 +11,7 @@ function Signup() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -25,28 +28,21 @@ function Signup() {
     }
 
     try {
-      const response = await fetch("http://localhost:5000/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
+      setLoading(true);
+      const response = await api.post("/auth/signup", {
+        name,
+        email,
+        password,
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.message || "Signup failed.");
-        return;
-      }
 
       alert("Account created successfully!");
     } catch (err) {
-      setError("Unable to connect to server. Please try again.");
+      setError(
+        err.response?.data?.message ||
+          "Unable to connect to server. Please try again.",
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -55,9 +51,9 @@ function Signup() {
       <div className="signup-container">
         {/* Left side - Signup form */}
         <div className="signup-form-section">
-          <a href="/" className="signup-logo">
+          <Link to="/" className="signup-logo">
             <span>PRIME</span> ESTATE.
-          </a>
+          </Link>
 
           <div className="signup-heading">
             <h1>Create Account</h1>
@@ -134,16 +130,15 @@ function Signup() {
 
             {error && <p className="signup-error">{error}</p>}
 
-            <button type="submit" className="signup-button">
-              Create Account
+            <button type="submit" className="signup-button" disabled={loading}>
+              {loading ? "Creating Account..." : "Create Account"}
             </button>
           </form>
 
           <div className="signup-login-link">
             Already have an account?
-            <a href="/login"> Login</a>
+            <Link to="/login"> Login</Link>
           </div>
-
           <p className="signup-footer">
             © 2026 Prime Estate. All rights reserved.
           </p>

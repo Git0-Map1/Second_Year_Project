@@ -1,7 +1,7 @@
 import { useState } from "react";
 import api from "../api/axios";
 import "./Login.css";
-import {useNavigate} from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false);
@@ -42,18 +42,15 @@ function Login() {
       //Redirect according to user role
       const role = response.data.role;
 
-      if(role === "customer"){
+      if (role === "customer") {
         navigate("/customer-dashboard");
-      } else if (role === "seller"){
-        navigate("/seller-dashboard")
-      } else if (role === "admin"){
-        navigate("/admin-dashboard")
+      } else if (role === "seller") {
+        navigate("/seller-dashboard");
+      } else if (role === "admin") {
+        navigate("/admin-dashboard");
       }
-      
     } catch (err) {
-      setMessage(
-        err.response?.data?.message || "unable to connect to server",
-      );
+      setMessage(err.response?.data?.message || "unable to connect to server");
     } finally {
       setLoading(false);
     }
@@ -64,9 +61,9 @@ function Login() {
       <div className="login-container">
         {/* Left side - Login form */}
         <div className="login-form-section">
-          <a href="/" className="login-logo">
+          <Link to="/" className="login-logo">
             <span>PRIME</span> ESTATE.
-          </a>
+          </Link>
 
           <div className="login-heading">
             <h1>Welcome Back!</h1>
@@ -118,7 +115,7 @@ function Login() {
             </div>
 
             <button type="submit" className="login-button" disabled={loading}>
-              {loading ? "logining in... " : "login"}
+              {loading ? "logging in... " : "login"}
             </button>
 
             {message && <p className="login-message">{message}</p>}
@@ -126,7 +123,7 @@ function Login() {
 
           <div className="signup-link">
             Don't have an account?
-            <a href="/signup"> Sign Up</a>
+            <Link to="/signup"> Sign Up</Link>
           </div>
 
           <p className="login-footer">

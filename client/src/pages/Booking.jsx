@@ -33,6 +33,8 @@ function Booking() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (submitting) return;
+
     setSubmitting(true);
     setSubmitError("");
 
@@ -169,7 +171,7 @@ function Booking() {
             <div className="booking-input-group">
               <label>Contact Number</label>
               <input
-                type="text"
+                type="tel"
                 name="contactNumber"
                 placeholder="Enter your contact number"
                 value={formData.contactNumber}

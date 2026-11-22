@@ -1,5 +1,5 @@
 import Navbar from "../components/Navbar";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import "./Home.css";
 import { useEffect, useState } from "react";
 import api from "../api/axios";
@@ -7,6 +7,31 @@ import api from "../api/axios";
 function Home() {
   const [properties, setProperties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  const [searchLocation, setSearchLocation] = useState("");
+  const [searchType, setSearchType] = useState("");
+  const [searchListing, setSearchListing] = useState("");
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+
+    const params = new URLSearchParams();
+
+    if (searchLocation.trim()) {
+      params.set("location", searchLocation.trim());
+    }
+
+    if (searchType) {
+      params.set("propertyType", searchType);
+    }
+
+    if (searchListing) {
+      params.set("listingType", searchListing);
+    }
+
+    navigate(`/properties?${params.toString()}`);
+  };
 
   useEffect(() => {
     const fetchFeaturedProperties = async () => {
@@ -25,8 +50,6 @@ function Home() {
   }, []);
 
   return (
-    <>
-      <Navbar />
 
       <main className="home-page">
         {/* Hero Section */}
@@ -44,6 +67,37 @@ function Home() {
               property is just one step away.
             </p>
 
+            <form className="hero-search-form" onSubmit={handleSearch}>
+              <input
+                type="text"
+                placeholder="Enter location (e.g. Kathmandu)"
+                value={searchLocation}
+                onChange={(e) => setSearchLocation(e.target.value)}
+              />
+
+              <select
+                value={searchType}
+                onChange={(e) => setSearchType(e.target.value)}
+              >
+                <option value="">Property Type</option>
+                <option value="house">House</option>
+                <option value="apartment">Apartment</option>
+                <option value="land">Land</option>
+                <option value="commercial">Commercial</option>
+              </select>
+
+              <select
+                value={searchListing}
+                onChange={(e) => setSearchListing(e.target.value)}
+              >
+                <option value="">Sale or Rent</option>
+                <option value="sale">For Sale</option>
+                <option value="rent">For Rent</option>
+              </select>
+
+              <button type="submit">Search Properties</button>
+            </form>
+            
             <div className="hero-buttons">
               <Link to="/properties" className="hero-primary-btn">
                 Explore Properties
@@ -113,7 +167,7 @@ function Home() {
             <Link to="/properties">View All Properties →</Link>
           </div>
         </section>
-        
+
         {/* Property Categories */}
         <section className="categories-section">
           <div className="section-heading">
@@ -174,7 +228,7 @@ function Home() {
           <p>© {new Date().getFullYear()} Prime Estate. All rights reserved.</p>
         </footer>
       </main>
-    </>
+  
   );
 }
 

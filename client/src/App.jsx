@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
@@ -6,6 +7,8 @@ import CustomerDashboard from "./pages/CustomerDashboard";
 import SellerDashboard from "./pages/SellerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import ProtectedRoute from "./components/ProtectedRoute";
+import CustomerNavbar from "./components/CustomerNavbar";
+
 import Properties from "./pages/Properties";
 import PropertyDetails from "./pages/PropertyDetails";
 import Booking from "./pages/Booking";
@@ -15,20 +18,67 @@ import PropertyForm from "./pages/PropertyForm";
 import SellerApplication from "./pages/SellerApplication";
 import Home from "./pages/Home";
 
+// Layout with Customer Navbar
+function CustomerLayout({ children }) {
+  return (
+    <>
+      <CustomerNavbar />
+      {children}
+    </>
+  );
+}
+
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/signup" element={<Signup />} />
-        <Route path="/properties" element={<Properties />} />
+        <Route
+          path="/"
+          element={<CustomerLayout><Home /></CustomerLayout>}
+        />
+
+        <Route
+          path="/login"
+          element={<CustomerLayout><Login /></CustomerLayout>}
+        />
+
+        <Route
+          path="/signup"
+          element={<CustomerLayout><Signup /></CustomerLayout>}
+        />
+
+        <Route
+          path="/properties"
+          element={<CustomerLayout><Properties /></CustomerLayout>}
+        />
+
+        <Route
+          path="/properties/:id"
+          element={<CustomerLayout><PropertyDetails /></CustomerLayout>}
+        />
+
+        <Route
+          path="/booking/:id"
+          element={<CustomerLayout><Booking /></CustomerLayout>}
+        />
+
+        <Route
+          path="/payment-failed"
+          element={<CustomerLayout><PaymentFailed /></CustomerLayout>}
+        />
+
+        <Route
+          path="/payment-success"
+          element={<CustomerLayout><PaymentSuccess /></CustomerLayout>}
+        />
 
         <Route
           path="/seller-application"
           element={
             <ProtectedRoute allowedRole="customer">
-              <SellerApplication />
+              <CustomerLayout>
+                <SellerApplication />
+              </CustomerLayout>
             </ProtectedRoute>
           }
         />
@@ -51,16 +101,13 @@ function App() {
           }
         />
 
-        <Route path="/properties/:id" element={<PropertyDetails />} />
-        <Route path="/booking/:id" element={<Booking />} />
-        <Route path="/payment-failed" element={<PaymentFailed />} />
-        <Route path="/payment-success" element={<PaymentSuccess />} />
-
         <Route
           path="/customer-dashboard"
           element={
             <ProtectedRoute allowedRole="customer">
-              <CustomerDashboard />
+              <CustomerLayout>
+                <CustomerDashboard />
+              </CustomerLayout>
             </ProtectedRoute>
           }
         />
